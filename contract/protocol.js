@@ -1,4 +1,4 @@
-import {Protocol} from "trac-peer";
+﻿import {Protocol} from "trac-peer";
 import { bufferToBigInt, bigIntToDecimalString } from "trac-msb/src/utils/amountSerialization.js";
 import b4a from "b4a";
 import PeerWallet from "trac-wallet";
@@ -85,7 +85,7 @@ const parseWelcomeArg = (raw) => {
     return null;
 };
 
-class SampleProtocol extends Protocol{
+class EscrowProtocol extends Protocol{
 
     /**
      * Extending from Protocol inherits its capabilities and allows you to define your own protocol.
@@ -114,9 +114,13 @@ class SampleProtocol extends Protocol{
      * @returns {Promise<void>}
      */
     async extendApi(){
-        this.api.getSampleData = function(){
-            return 'Some sample data';
-        }
+        this.api.getAppInfo = function(){
+            return {
+                app: 'amanah-escrow',
+                description: 'P2P escrow coordination on top of Intercom',
+                version: 1
+            };
+        };
     }
 
     /**
@@ -132,76 +136,120 @@ class SampleProtocol extends Protocol{
      * @returns {{type: string, value: *}|null}
      */
     mapTxCommand(command){
-        // prepare the payload
-        let obj = { type : '', value : null };
-        /*
-        Triggering contract function in terminal will look like this:
+        const cmd = String(command || '').trim();
+        let obj = { type: '', value: null };
 
-        /tx --command 'something'
-
-        You can also simulate a tx prior broadcast
-
-        /tx --command 'something' --sim 1
-
-        To programmatically execute a transaction from "outside",
-        the api function "this.api.tx()" needs to be exposed by adding
-        "api_tx_exposed : true" to the Peer instance options.
-        Once exposed, it can be used directly through peer.protocol_instance.api.tx()
-
-        Please study the superclass of this Protocol and Protocol.api to learn more.
-        */
-        if(command === 'something'){
-            // type points at the "storeSomething" function in the contract.
-            obj.type = 'storeSomething';
-            // value can be null as there is no other payload, but the property must exist.
-            obj.value = null;
-            // return the payload to be used in your contract
-            return obj;
-        } else if (command === 'read_snapshot') {
+        if (cmd === 'deal_snapshot' || cmd === 'read_snapshot') {
             obj.type = 'readSnapshot';
             obj.value = null;
             return obj;
-        } else if (command === 'read_chat_last') {
-            obj.type = 'readChatLast';
-            obj.value = null;
-            return obj;
-        } else if (command === 'read_timer') {
+        }
+
+        if (cmd === 'read_timer') {
             obj.type = 'readTimer';
             obj.value = null;
             return obj;
-        } else {
-            /*
-            now we assume our protocol allows to submit a json string with information
-            what to do (the op) then we pass the parsed object to the value.
-            the accepted json string can be executed as tx like this:
-
-            /tx --command '{ "op" : "do_something", "some_key" : "some_data" }'
-
-            Of course we can simulate this, as well:
-
-            /tx --command '{ "op" : "do_something", "some_key" : "some_data" }' --sim 1
-            */
-            const json = this.safeJsonParse(command);
-            if(json.op !== undefined && json.op === 'do_something'){
-                obj.type = 'submitSomething';
-                obj.value = json;
-                return obj;
-            } else if (json.op !== undefined && json.op === 'read_key') {
-                obj.type = 'readKey';
-                obj.value = json;
-                return obj;
-            } else if (json.op !== undefined && json.op === 'read_chat_last') {
-                obj.type = 'readChatLast';
-                obj.value = null;
-                return obj;
-            } else if (json.op !== undefined && json.op === 'read_timer') {
-                obj.type = 'readTimer';
-                obj.value = null;
-                return obj;
-            }
         }
-        // return null if no case matches.
-        // if you do not return null, your protocol might behave unexpected.
+
+        if (cmd === 'deal_list' || cmd === 'list_deals') {
+            obj.type = 'listDeals';
+            obj.value = { op: 'list_deals', limit: 20 };
+            return obj;
+        }
+
+        if (cmd.startsWith('deal_list:')) {
+            const limitRaw = cmd.slice('deal_list:'.length).trim();
+            const parsedLimit = Number.parseInt(limitRaw, 10);
+            obj.type = 'listDeals';
+            obj.value = {
+                op: 'list_deals',
+                limit: Number.isFinite(parsedLimit) ? parsedLimit : 20
+            };
+            return obj;
+        }
+
+        if (cmd.startsWith('deal_read:')) {
+            const dealId = cmd.slice('deal_read:'.length).trim();
+            if (!dealId) return null;
+            obj.type = 'readDeal';
+            obj.value = { op: 'read_deal', dealId };
+            return obj;
+        }
+
+        if (cmd.startsWith('deal_status:')) {
+            const status = cmd.slice('deal_status:'.length).trim().toLowerCase();
+            if (!status) return null;
+            obj.type = 'listDealsByStatus';
+            obj.value = { op: 'list_deals_by_status', status, limit: 20 };
+            return obj;
+        }
+
+        const json = this.safeJsonParse(cmd);
+        if (!json || typeof json !== 'object') return null;
+        const op = String(json.op || '').trim().toLowerCase();
+        if (!op) return null;
+
+        if (op === 'deal_create') {
+            obj.type = 'dealCreate';
+            obj.value = json;
+            return obj;
+        }
+        if (op === 'deal_fund') {
+            obj.type = 'dealFund';
+            obj.value = json;
+            return obj;
+        }
+        if (op === 'deal_deliver') {
+            obj.type = 'dealDeliver';
+            obj.value = json;
+            return obj;
+        }
+        if (op === 'deal_release') {
+            obj.type = 'dealRelease';
+            obj.value = json;
+            return obj;
+        }
+        if (op === 'deal_refund') {
+            obj.type = 'dealRefund';
+            obj.value = json;
+            return obj;
+        }
+        if (op === 'deal_dispute') {
+            obj.type = 'dealDispute';
+            obj.value = json;
+            return obj;
+        }
+        if (op === 'deal_resolve') {
+            obj.type = 'dealResolve';
+            obj.value = json;
+            return obj;
+        }
+        if (op === 'deal_cancel') {
+            obj.type = 'dealCancel';
+            obj.value = json;
+            return obj;
+        }
+        if (op === 'read_deal') {
+            obj.type = 'readDeal';
+            obj.value = json;
+            return obj;
+        }
+        if (op === 'list_deals') {
+            obj.type = 'listDeals';
+            obj.value = json;
+            return obj;
+        }
+        if (op === 'list_deals_by_status') {
+            obj.type = 'listDealsByStatus';
+            obj.value = json;
+            return obj;
+        }
+        if (op === 'read_snapshot') {
+            obj.type = 'readSnapshot';
+            obj.value = null;
+            return obj;
+        }
+
         return null;
     }
 
@@ -212,11 +260,24 @@ class SampleProtocol extends Protocol{
      */
     async printOptions(){
         console.log(' ');
-        console.log('- Sample Commands:');
-        console.log("- /print | use this flag to print some text to the terminal: '--text \"I am printing\"");
+        console.log('- Escrow Mesh Commands:');
+        console.log('- /deal_examples | print ready-to-use /tx payloads for escrow lifecycle.');
         console.log('- /get --key "<key>" [--confirmed true|false] | reads subnet state key (confirmed defaults to true).');
         console.log('- /msb | prints MSB txv + lengths (local MSB node view).');
-        console.log('- /tx --command "read_chat_last" | prints last chat message captured by contract.');
+        console.log('- /tx --command "deal_snapshot" | prints deal counters + last deal snapshot.');
+        console.log('- /tx --command "deal_list" | prints latest deals (default limit=20).');
+        console.log('- /tx --command "deal_list:50" | prints latest deals with explicit limit.');
+        console.log('- /tx --command "deal_read:<dealId>" | prints one deal.');
+        console.log('- /tx --command "deal_status:disputed" | prints deals filtered by status.');
+        console.log('- /deal_wizard | terminal quick menu for first-time users.');
+        console.log('- /tx --command \'{"op":"deal_create","dealId":"deal-001","title":"USDT for services","amount":"100","asset":"USDT","seller":"trac1...","arbiter":"trac1...","terms":"Delivery in 24h","channel":"deal/deal-001"}\'');
+        console.log('- /tx --command \'{"op":"deal_fund","dealId":"deal-001","fundRef":"tx-lock-123"}\'');
+        console.log('- /tx --command \'{"op":"deal_deliver","dealId":"deal-001","proof":"ipfs://..."}\'');
+        console.log('- /tx --command \'{"op":"deal_dispute","dealId":"deal-001","reason":"proof mismatch"}\'');
+        console.log('- /tx --command \'{"op":"deal_resolve","dealId":"deal-001","resolution":"refund","note":"buyer wins","txRef":"tx-refund-1"}\'');
+        console.log('- /tx --command \'{"op":"deal_release","dealId":"deal-001","txRef":"tx-release-1"}\'');
+        console.log('- /tx --command \'{"op":"deal_refund","dealId":"deal-001","reason":"seller voluntary","txRef":"tx-refund-2"}\'');
+        console.log('- /tx --command \'{"op":"deal_cancel","dealId":"deal-001","reason":"counterparty no-show"}\'');
         console.log('- /tx --command "read_timer" | prints current timer feature value.');
         console.log('- /sc_join --channel "<name>" | join an ephemeral sidechannel (no autobase).');
         console.log('- /sc_open --channel "<name>" [--via "<channel>"] [--invite <json|b64|@file>] [--welcome <json|b64|@file>] | request others to open a sidechannel.');
@@ -224,7 +285,6 @@ class SampleProtocol extends Protocol{
         console.log('- /sc_invite --channel "<name>" --pubkey "<peer-pubkey-hex>" [--ttl <sec>] [--welcome <json|b64|@file>] | create a signed invite.');
         console.log('- /sc_welcome --channel "<name>" --text "<message>" | create a signed welcome.');
         console.log('- /sc_stats | show sidechannel channels + connection count.');
-        // further protocol specific options go here
     }
 
     /**
@@ -271,6 +331,29 @@ class SampleProtocol extends Protocol{
                 peerMsbBalance: balance,
                 msbFee: fee,
             });
+            return;
+        }
+        if (this.input.startsWith("/deal_examples")) {
+            console.log('Escrow Mesh /tx examples:');
+            console.log('/tx --command \'{"op":"deal_create","dealId":"deal-001","title":"USDT for services","amount":"100","asset":"USDT","seller":"trac1seller...","arbiter":"trac1arbiter...","terms":"Delivery in 24h","channel":"deal/deal-001"}\'');
+            console.log('/tx --command \'{"op":"deal_fund","dealId":"deal-001","fundRef":"tx-lock-123"}\'');
+            console.log('/tx --command \'{"op":"deal_deliver","dealId":"deal-001","proof":"ipfs://proof"}\'');
+            console.log('/tx --command \'{"op":"deal_release","dealId":"deal-001","txRef":"tx-release-1"}\'');
+            console.log('/tx --command \'{"op":"deal_dispute","dealId":"deal-001","reason":"proof mismatch"}\'');
+            console.log('/tx --command \'{"op":"deal_resolve","dealId":"deal-001","resolution":"refund","note":"buyer wins","txRef":"tx-refund-1"}\'');
+            console.log('/tx --command "deal_snapshot"');
+            console.log('/tx --command "deal_list:50"');
+            console.log('/tx --command "deal_status:disputed"');
+            console.log('/tx --command "deal_read:deal-001"');
+            return;
+        }
+        if (this.input.startsWith("/deal_wizard")) {
+            console.log('Deal Wizard (terminal UI):');
+            console.log('1) Create deal  -> /tx --command \'{"op":"deal_create","dealId":"deal-001","title":"USDT for services","amount":"100","asset":"USDT","seller":"trac1seller...","arbiter":"trac1arbiter...","terms":"Delivery in 24h","channel":"deal/deal-001"}\'');
+            console.log('2) Fund deal    -> /tx --command \'{"op":"deal_fund","dealId":"deal-001","fundRef":"tx-lock-123"}\'');
+            console.log('3) Deliver      -> /tx --command \'{"op":"deal_deliver","dealId":"deal-001","proof":"ipfs://proof"}\'');
+            console.log('4) Release      -> /tx --command \'{"op":"deal_release","dealId":"deal-001","txRef":"tx-release-1"}\'');
+            console.log('5) Dispute flow -> /tx --command \'{"op":"deal_dispute","dealId":"deal-001","reason":"proof mismatch"}\'');
             return;
         }
         if (this.input.startsWith("/sc_join")) {
@@ -596,4 +679,5 @@ class SampleProtocol extends Protocol{
     }
 }
 
-export default SampleProtocol;
+export default EscrowProtocol;
+
