@@ -34,6 +34,13 @@ pear run . --peer-store-name admin --msb-store-name admin-msb --subnet-channel a
 /deal_wizard
 ```
 
+## Changelog
+## v0.1.0 - 2026-02-20
+- Added centralized parse helpers for boolean flags, CSV values, key-value lists, and JSON/base64 payloads.
+- Added optional parsing support for `@file` input, object passthrough, and configurable base64 prefix handling.
+- Reduced duplicated parsing logic by reusing shared helpers across runtime config parsing, protocol invite/welcome parsing, and SC-Bridge payload parsing.
+- Added unit tests for parser behavior and edge cases (valid JSON/base64, file-based input, and invalid input handling).
+
 ## References
 - Fork source: https://github.com/Trac-Systems/intercom
 - Awesome list target: https://github.com/Trac-Systems/awesome-intercom
