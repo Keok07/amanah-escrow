@@ -2,6 +2,7 @@ import Feature from 'trac-peer/src/artifacts/feature.js';
 import { TerminalHandlers } from 'trac-peer/src/terminal/handlers.js';
 import b4a from 'b4a';
 import ws from 'bare-ws';
+import { parseJsonOrBase64 } from '../../lib/parse.js';
 
 const normalizeText = (value) => {
   if (value === null || value === undefined) return '';
@@ -10,27 +11,6 @@ const normalizeText = (value) => {
     return JSON.stringify(value);
   } catch (_e) {
     return String(value);
-  }
-};
-
-const parseJsonOrBase64 = (value) => {
-  if (!value) return null;
-  if (typeof value === 'object') return value;
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  if (trimmed.startsWith('{')) {
-    try {
-      return JSON.parse(trimmed);
-    } catch (_e) {
-      return null;
-    }
-  }
-  try {
-    const text = b4a.toString(b4a.from(trimmed, 'base64'), 'utf8');
-    return JSON.parse(text);
-  } catch (_e) {
-    return null;
   }
 };
 
@@ -252,8 +232,8 @@ class ScBridge extends Feature {
           return;
         }
         const payload = message.message;
-        const invite = parseJsonOrBase64(message.invite);
-        const welcome = parseJsonOrBase64(message.welcome);
+        const invite = parseJsonOrBase64(message.invite, { allowObject: true });
+        const welcome = parseJsonOrBase64(message.welcome, { allowObject: true });
         if (message.invite && !invite) {
           sendError('Invalid invite (expected JSON or base64).');
           return;
@@ -291,8 +271,8 @@ class ScBridge extends Feature {
           sendError('Missing channel.');
           return;
         }
-        const invite = parseJsonOrBase64(message.invite);
-        const welcome = parseJsonOrBase64(message.welcome);
+        const invite = parseJsonOrBase64(message.invite, { allowObject: true });
+        const welcome = parseJsonOrBase64(message.welcome, { allowObject: true });
         if (message.invite && !invite) {
           sendError('Invalid invite (expected JSON or base64).');
           return;
@@ -351,8 +331,8 @@ class ScBridge extends Feature {
           return;
         }
         const via = message.via ? String(message.via) : null;
-        const invite = parseJsonOrBase64(message.invite);
-        const welcome = parseJsonOrBase64(message.welcome);
+        const invite = parseJsonOrBase64(message.invite, { allowObject: true });
+        const welcome = parseJsonOrBase64(message.welcome, { allowObject: true });
         if (message.invite && !invite) {
           sendError('Invalid invite (expected JSON or base64).');
           return;
