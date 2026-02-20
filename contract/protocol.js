@@ -2,7 +2,7 @@
 import { bufferToBigInt, bigIntToDecimalString } from "trac-msb/src/utils/amountSerialization.js";
 import b4a from "b4a";
 import PeerWallet from "trac-wallet";
-import fs from "fs";
+import { parseJsonOrBase64 } from "../lib/parse.js";
 
 const stableStringify = (value) => {
     if (value === null || value === undefined) return 'null';
@@ -38,51 +38,17 @@ const normalizeWelcomePayload = (payload) => {
 };
 
 const parseInviteArg = (raw) => {
-    if (!raw) return null;
-    let text = String(raw || '').trim();
-    if (!text) return null;
-    if (text.startsWith('@')) {
-        try {
-            text = fs.readFileSync(text.slice(1), 'utf8').trim();
-        } catch (_e) {
-            return null;
-        }
-    }
-    if (text.startsWith('b64:')) text = text.slice(4);
-    if (text.startsWith('{')) {
-        try {
-            return JSON.parse(text);
-        } catch (_e) {}
-    }
-    try {
-        const decoded = b4a.toString(b4a.from(text, 'base64'));
-        return JSON.parse(decoded);
-    } catch (_e) {}
-    return null;
+    return parseJsonOrBase64(raw, {
+        allowFile: true,
+        base64Prefix: 'b64:',
+    });
 };
 
 const parseWelcomeArg = (raw) => {
-    if (!raw) return null;
-    let text = String(raw || '').trim();
-    if (!text) return null;
-    if (text.startsWith('@')) {
-        try {
-            text = fs.readFileSync(text.slice(1), 'utf8').trim();
-        } catch (_e) {
-            return null;
-        }
-    }
-    if (text.startsWith('b64:')) text = text.slice(4);
-    if (text.startsWith('{')) {
-        try {
-            return JSON.parse(text);
-        } catch (_e) {}
-    }
-    try {
-        const decoded = b4a.toString(b4a.from(text, 'base64'));
-        return JSON.parse(decoded);
-    } catch (_e) {}
-    return null;
+    return parseJsonOrBase64(raw, {
+        allowFile: true,
+        base64Prefix: 'b64:',
+    });
 };
 
 class EscrowProtocol extends Protocol{
