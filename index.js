@@ -11,6 +11,7 @@ import { getPearRuntime, ensureTrailingSlash } from 'trac-peer/src/runnerArgs.js
 import { Terminal } from 'trac-peer/src/terminal/index.js';
 import SampleProtocol from './contract/protocol.js';
 import SampleContract from './contract/contract.js';
+import { parseBool, parseKeyValueList, parseCsvList, parseJsonOrBase64 } from './lib/parse.js';
 import { Timer } from './features/timer/index.js';
 import Sidechannel from './features/sidechannel/index.js';
 import ScBridge from './features/sc-bridge/index.js';
@@ -50,66 +51,6 @@ const sidechannelsRaw =
   (flags['sidechannel'] && String(flags['sidechannel'])) ||
   env.SIDECHANNELS ||
   '';
-
-const parseBool = (value, fallback) => {
-  if (value === undefined || value === null || value === '') return fallback;
-  return ['1', 'true', 'yes', 'on'].includes(String(value).trim().toLowerCase());
-};
-
-const parseKeyValueList = (raw) => {
-  if (!raw) return [];
-  return String(raw)
-    .split(',')
-    .map((entry) => String(entry || '').trim())
-    .filter((entry) => entry.length > 0)
-    .map((entry) => {
-      const idx = entry.indexOf(':');
-      const alt = entry.indexOf('=');
-      const splitAt = idx >= 0 ? idx : alt;
-      if (splitAt <= 0) return null;
-      const key = entry.slice(0, splitAt).trim();
-      const value = entry.slice(splitAt + 1).trim();
-      if (!key || !value) return null;
-      return [key, value];
-    })
-    .filter(Boolean);
-};
-
-const parseCsvList = (raw) => {
-  if (!raw) return null;
-  return String(raw)
-    .split(',')
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0);
-};
-
-const parseWelcomeValue = (raw) => {
-  if (!raw) return null;
-  let text = String(raw || '').trim();
-  if (!text) return null;
-  if (text.startsWith('@')) {
-    try {
-      const filePath = path.resolve(text.slice(1));
-      text = String(fs.readFileSync(filePath, 'utf8') || '').trim();
-      if (!text) return null;
-    } catch (_e) {
-      return null;
-    }
-  }
-  if (text.startsWith('b64:')) text = text.slice(4);
-  if (text.startsWith('{')) {
-    try {
-      return JSON.parse(text);
-    } catch (_e) {
-      return null;
-    }
-  }
-  try {
-    const decoded = b4a.toString(b4a.from(text, 'base64'));
-    return JSON.parse(decoded);
-  } catch (_e) {}
-  return null;
-};
 
 const sidechannelDebugRaw =
   (flags['sidechannel-debug'] && String(flags['sidechannel-debug'])) ||
@@ -236,7 +177,11 @@ const sidechannelWelcomeRaw =
 const sidechannelWelcomeEntries = parseKeyValueList(sidechannelWelcomeRaw);
 const sidechannelWelcomeMap = new Map();
 for (const [channel, value] of sidechannelWelcomeEntries) {
-  const welcome = parseWelcomeValue(value);
+  const welcome = parseJsonOrBase64(value, {
+    allowFile: true,
+    filePathResolver: (filePath) => path.resolve(filePath),
+    base64Prefix: 'b64:',
+  });
   if (channel && welcome) sidechannelWelcomeMap.set(channel.trim(), welcome);
 }
 const sidechannelWelcomeRequiredRaw =
